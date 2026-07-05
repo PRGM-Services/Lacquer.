@@ -14,4 +14,4 @@ dist/
 .env.local
 
 
-.claude
+.claude/
