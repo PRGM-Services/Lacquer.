@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Lacquer — path-traced automotive visualization</title>
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <link rel="apple-touch-icon" href="/logo.png" />
   <style>
     /* ============================ design tokens ============================ */
     :root {
@@ -85,8 +88,9 @@
     /* ================================ top bar =============================== */
     #topbar { flex: 0 0 var(--topbar-h); display: flex; align-items: center; gap: 10px;
       padding: 0 14px; background: transparent; position: relative; z-index: 30; }
-    #topbar .brand { font-size: 15px; font-weight: 700; letter-spacing: 0.05em;
-      margin-right: 4px; user-select: none; }
+    #topbar .brand { display: flex; align-items: center; gap: 8px; font-size: 15px;
+      font-weight: 700; letter-spacing: 0.05em; margin-right: 4px; user-select: none; }
+    #topbar .brand img { height: 32px; width: auto; display: block; }
     #topbar .brand span { color: var(--accent); }
     .tb-group { display: inline-flex; align-items: center; gap: 2px; padding: 3px;
       background: var(--card); border: 1px solid var(--border); border-radius: 10px; }
@@ -396,7 +400,7 @@
 <body>
   <!-- ================================ top bar ============================== -->
   <header id="topbar">
-    <div class="brand">LACQUER<span>.</span></div>
+    <div class="brand"><img src="/logo.png" alt="Lacquer" /></div>
 
     <div class="tb-group">
       <input id="open-input" type="file" accept=".lacquer" hidden />

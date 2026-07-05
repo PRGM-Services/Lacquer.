@@ -25,7 +25,12 @@
       "Bash(grep -oE '\\\\$\\(<[^>]*>\\)?\\\\\\(\"\\([a-zA-Z0-9-]+\\)\"\\\\\\)' src/demo/main.ts)",
       "Bash(grep -oE '\\\\$\\(<[^>]*>\\)?\\\\\\(\"\\([a-zA-Z0-9-]+\\)\"\\\\\\)' src/demo/materialManager.ts)",
       "Bash(grep *)",
-      "Bash(perl -0pi -e 's/<details class=\"sec\" open id=\"transform-props\">/<details class=\"sec\" open id=\"transform-props\" hidden>/; s/<details class=\"sec\" open id=\"material-props\">/<details class=\"sec\" open id=\"material-props\" hidden>/; s/<details class=\"sec\" id=\"decal-props\">/<details class=\"sec\" id=\"decal-props\" hidden>/' index.html)"
+      "Bash(perl -0pi -e 's/<details class=\"sec\" open id=\"transform-props\">/<details class=\"sec\" open id=\"transform-props\" hidden>/; s/<details class=\"sec\" open id=\"material-props\">/<details class=\"sec\" open id=\"material-props\" hidden>/; s/<details class=\"sec\" id=\"decal-props\">/<details class=\"sec\" id=\"decal-props\" hidden>/' index.html)",
+      "Read(//Users/ax200m/Downloads/PRGM Work/Lacquer/**)",
+      "Bash(git -C /Users/ax200m/Desktop/UnamedRenderEngine rev-parse --is-inside-work-tree)",
+      "Bash(cp \"/Users/ax200m/Downloads/PRGM Work/Lacquer/Favicon.ico\" public/favicon.ico)",
+      "Bash(cp \"/Users/ax200m/Downloads/PRGM Work/Lacquer/Logo..png\" public/logo.png)",
+      "Bash(cp \"/Users/ax200m/Downloads/PRGM Work/Lacquer/Header..png\" assets/banner.png)"
     ]
   }
 }
