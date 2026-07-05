@@ -12,3 +12,6 @@ dist/
 # local env
 .env
 .env.local
+
+
+.claude
