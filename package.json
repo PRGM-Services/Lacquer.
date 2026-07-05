@@ -1,0 +1,33 @@
+{
+  "name": "lacquer-engine",
+  "version": "0.1.0",
+  "description": "Open-source, physically based, path-traced automotive visualization engine for the web. WebGPU path tracing with a WebGL2 PBR fallback.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.44",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0"
+  },
+  "keywords": [
+    "webgpu",
+    "webgl2",
+    "path-tracing",
+    "ray-tracing",
+    "global-illumination",
+    "pbr",
+    "automotive",
+    "hdri",
+    "decals",
+    "rendering-engine"
+  ],
+  "dependencies": {
+    "fbx-parser": "^2.1.3"
+  }
+}

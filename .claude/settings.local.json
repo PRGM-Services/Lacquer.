@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npm install *)",
+      "Bash(npx --prefix /Users/ax200m/Desktop/UnamedRenderEngine tsc --noEmit -p /Users/ax200m/Desktop/UnamedRenderEngine)",
+      "Bash(npx tsc *)",
+      "Bash(\"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\" --version)",
+      "Bash(brew --version)",
+      "Bash(brew install *)",
+      "Bash(deno --version)",
+      "Bash(npm init *)",
+      "Bash(deno run *)",
+      "Bash(npm run *)",
+      "Bash(perl -i -pe 's/p\\\\.indexOf\\\\\\(\"\\\\x00\"\\\\\\)/p.indexOf\\(\"\\\\\\\\u0000\"\\)/' src/loaders/FBXLoader.ts)",
+      "Bash(perl -i -pe 's/e2e_render\\\\.png/fbx_render.png/' render_fbx.ts)",
+      "Bash(cp render_e2e.ts render_glass.ts)",
+      "Bash(perl -0pi -e 's/mat4Translation\\\\\\(\\\\[-1\\\\.6, 0\\\\.6, 0\\\\]\\\\\\)/mat4Translation\\([0, 0.7, -2.2]\\)/; s/mat4Translation\\\\\\(\\\\[1\\\\.6, 0\\\\.6, 0\\\\]\\\\\\)/mat4Translation\\([9, 0.6, 0]\\)/; s/scene\\\\.camera\\\\.position = \\\\[3\\\\.2, 1\\\\.7, 4\\\\.4\\\\];/scene.camera.position = [0, 0.85, 2.4];/; s/scene\\\\.camera\\\\.target = \\\\[0, 0\\\\.5, 0\\\\];/scene.camera.target = [0, 0.65, 0];/; s/e2e_render\\\\.png/glass_render.png/' render_glass.ts)",
+      "Bash(perl -0pi -e 's/mat4Translation\\\\\\(\\\\[0, 0\\\\.7, -2\\\\.2\\\\]\\\\\\)/mat4Translation\\([0, 1.9, -2.4]\\)/' render_glass.ts)",
+      "Bash(perl -0pi -e 's/Material\\\\.carPaint\\\\\\(\\\\[0\\\\.55, 0\\\\.02, 0\\\\.04\\\\]\\\\\\)/new Material\\({ baseColor: [0.9, 0.02, 0.02], roughness: 0.9 }\\)/' render_glass.ts)",
+      "Bash(perl -0pi -e 's/sphereGeometry\\\\\\(0\\\\.6\\\\\\), new Material\\\\\\(\\\\{ baseColor: \\\\[0\\\\.9, 0\\\\.02, 0\\\\.02\\\\], roughness: 0\\\\.9 \\\\}\\\\\\)/sphereGeometry\\(1.4\\), new Material\\({ baseColor: [0.9, 0.02, 0.02], roughness: 0.9 }\\)/' render_glass.ts)",
+      "Bash(perl -0pi -e 's/const W = 320, H = 240, SPP = 48;/const W = 480, H = 360, SPP = 128;/; s/scene\\\\.camera\\\\.position = \\\\[0, 0\\\\.85, 2\\\\.4\\\\];/scene.camera.position = [0, 0.75, 1.6];/' render_glass.ts)",
+      "Bash(perl -0pi -e 's/sphereGeometry\\\\\\(1\\\\.4\\\\\\)/sphereGeometry\\(3.5\\)/; s/mat4Translation\\\\\\(\\\\[0, 1\\\\.9, -2\\\\.4\\\\]\\\\\\)/mat4Translation\\([0, 1.2, -5]\\)/' render_glass.ts)",
+      "Bash(grep -oE '\\\\$\\(<[^>]*>\\)?\\\\\\(\"\\([a-z0-9-]+\\)\"\\\\\\)' src/demo/main.ts)",
+      "Bash(grep -oE '\\\\$\\(<[^>]*>\\)?\\\\\\(\"\\([a-zA-Z0-9-]+\\)\"\\\\\\)' src/demo/main.ts)",
+      "Bash(grep -oE '\\\\$\\(<[^>]*>\\)?\\\\\\(\"\\([a-zA-Z0-9-]+\\)\"\\\\\\)' src/demo/materialManager.ts)",
+      "Bash(grep *)",
+      "Bash(perl -0pi -e 's/<details class=\"sec\" open id=\"transform-props\">/<details class=\"sec\" open id=\"transform-props\" hidden>/; s/<details class=\"sec\" open id=\"material-props\">/<details class=\"sec\" open id=\"material-props\" hidden>/; s/<details class=\"sec\" id=\"decal-props\">/<details class=\"sec\" id=\"decal-props\" hidden>/' index.html)"
+    ]
+  }
+}

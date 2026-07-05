@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Lacquer — path-traced automotive visualization</title>
+  <style>
+    /* ============================ design tokens ============================ */
+    :root {
+      --accent: #ff3b1f;
+      --accent-soft: rgba(255, 59, 31, 0.16);
+      --bg: #121317;
+      --bg-raised: #1a1b21;
+      --card: rgba(255, 255, 255, 0.032);
+      --card-hover: rgba(255, 255, 255, 0.055);
+      --border: rgba(255, 255, 255, 0.07);
+      --border-strong: rgba(255, 255, 255, 0.13);
+      --text: #ecedef;
+      --text-dim: #9a9ba3;
+      --text-faint: #686a73;
+      --field: #1e2026;
+      --field-hover: #262931;
+      --track: #2d2f37;
+      --radius: 10px;
+      --radius-lg: 14px;
+      --topbar-h: 50px;
+      --shadow-pop: 0 16px 44px rgba(0, 0, 0, 0.55);
+    }
+    * { box-sizing: border-box; margin: 0; }
+    html, body { height: 100%; overflow: hidden; background: var(--bg);
+      font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--text); -webkit-font-smoothing: antialiased; }
+    /* Faint dotted texture behind the chrome (the viewport frame covers its
+       own area, so dots only show on the surrounding UI). */
+    body { display: flex; flex-direction: column;
+      background-color: var(--bg);
+      background-image: radial-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+      background-size: 20px 20px; background-position: -1px -1px; }
+    ::selection { background: var(--accent-soft); }
+
+    /* ------------------------------- sliders ------------------------------- */
+    input[type=range] { -webkit-appearance: none; appearance: none; flex: 1;
+      min-width: 0; height: 4px; border-radius: 2px; background: var(--track);
+      outline: none; cursor: pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none;
+      width: 13px; height: 13px; border-radius: 50%; background: #f2f2f4;
+      border: none; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
+      transition: transform 0.1s ease, background 0.1s ease; }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15);
+      background: #fff; }
+    input[type=range]:active::-webkit-slider-thumb { background: var(--accent); }
+    input[type=range]::-moz-range-thumb { width: 13px; height: 13px;
+      border-radius: 50%; background: #f2f2f4; border: none;
+      box-shadow: 0 1px 5px rgba(0, 0, 0, 0.55); }
+    input[type=range]:active::-moz-range-thumb { background: var(--accent); }
+    input[type=range]::-moz-range-track { height: 4px; border-radius: 2px;
+      background: var(--track); }
+
+    /* ------------------------------ text fields ---------------------------- */
+    input[type=number], input[type=text], input[type=search] {
+      padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border-strong);
+      background: var(--field); color: var(--text); font: inherit; font-size: 12px;
+      font-variant-numeric: tabular-nums; min-width: 0;
+      transition: border-color 0.12s ease; }
+    input[type=number]:focus, input[type=text]:focus, input[type=search]:focus {
+      outline: none; border-color: var(--accent); }
+    input[type=number]:disabled { opacity: 0.4; }
+    input[type=color] { width: 100%; height: 30px; border: 1px solid var(--border-strong);
+      border-radius: 8px; background: var(--field); padding: 0; cursor: pointer;
+      overflow: hidden; }
+    input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type=color]::-webkit-color-swatch { border: none; border-radius: 7px; }
+    input[type=color]::-moz-color-swatch { border: none; border-radius: 7px; }
+
+    select, .btn { width: 100%; margin: 4px 0; padding: 6px 9px;
+      border-radius: 8px; border: 1px solid var(--border-strong);
+      background: var(--field); color: var(--text); font: inherit; cursor: pointer;
+      transition: background 0.12s ease, border-color 0.12s ease; }
+    select:hover, .btn:hover { background: var(--field-hover); }
+    .btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.danger:hover { background: #43201a; border-color: rgba(255, 90, 60, 0.45); }
+    .row { display: flex; gap: 6px; }
+    .hint-text { font-size: 11px; color: var(--text-dim); margin: 2px 0 6px; }
+
+    /* ================================ top bar =============================== */
+    #topbar { flex: 0 0 var(--topbar-h); display: flex; align-items: center; gap: 10px;
+      padding: 0 14px; background: transparent; position: relative; z-index: 30; }
+    #topbar .brand { font-size: 15px; font-weight: 700; letter-spacing: 0.05em;
+      margin-right: 4px; user-select: none; }
+    #topbar .brand span { color: var(--accent); }
+    .tb-group { display: inline-flex; align-items: center; gap: 2px; padding: 3px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px; }
+    .tb-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
+      border-radius: 7px; border: none; background: transparent;
+      color: #b9bac1; font: inherit; cursor: pointer; white-space: nowrap;
+      transition: background 0.12s ease, color 0.12s ease; }
+    .tb-btn:hover { background: var(--field-hover); color: var(--text); }
+    .tb-btn.active { background: var(--accent); color: #fff; }
+    .tb-btn.chev { padding: 5px 6px; font-size: 9px; }
+    .tb-btn.icon { padding: 5px 9px; }
+    .tb-btn:disabled { opacity: 0.35; cursor: default; }
+    .tb-btn:disabled:hover { background: transparent; color: #b9bac1; }
+    .tb-spacer { flex: 1; }
+    #view-mode { width: auto; margin: 0; padding: 5px 24px 5px 10px; border: none;
+      background: transparent; color: #b9bac1; border-radius: 7px; line-height: 1.45;
+      appearance: none; -webkit-appearance: none; cursor: pointer;
+      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%239a9ba3' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 8px center; }
+    #view-mode:hover { background-color: var(--field-hover); color: var(--text); }
+    .tb-btn.icon svg, .tb-btn svg { display: block; }
+
+    /* snap settings popover */
+    #snap-wrap { position: relative; display: inline-flex; align-items: center; }
+    #snap-pop { position: absolute; top: calc(100% + 8px); left: 0; width: 210px;
+      background: var(--bg-raised); border: 1px solid var(--border-strong);
+      border-radius: var(--radius-lg); padding: 12px 14px; box-shadow: var(--shadow-pop);
+      z-index: 40; }
+    #snap-pop h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-dim); margin-bottom: 8px; }
+    #snap-pop label { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+    #snap-pop label span { flex: 1; color: #c6c7cd; }
+    #snap-pop input { width: 68px; }
+
+    /* ray tracing switch */
+    .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+      color: #b9bac1; user-select: none; white-space: nowrap; }
+    .switch input { position: absolute; opacity: 0; pointer-events: none; }
+    .switch .track { width: 34px; height: 19px; border-radius: 10px; background: var(--track);
+      border: 1px solid var(--border-strong); position: relative; transition: background 0.15s; }
+    .switch .track::after { content: ""; position: absolute; top: 2px; left: 2px;
+      width: 13px; height: 13px; border-radius: 50%; background: #c6c7cd;
+      transition: transform 0.15s, background 0.15s; }
+    .switch input:checked + .track { background: var(--accent); border-color: var(--accent); }
+    .switch input:checked + .track::after { transform: translateX(15px); background: #fff; }
+    .switch input:disabled + .track { opacity: 0.4; }
+
+    /* =============================== workspace ============================== */
+    #workspace { flex: 1; display: flex; min-height: 0; }
+
+    .panel { flex: 0 0 auto; display: flex; flex-direction: column; min-height: 0;
+      overflow: hidden; }
+    #left-panel { width: 240px; min-width: 170px; max-width: 460px; }
+    #right-panel { width: 300px; min-width: 220px; max-width: 480px; }
+    .panel-head { padding: 10px 16px 8px; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim);
+      flex: 0 0 auto; }
+    .panel-body { flex: 1; overflow-y: auto; padding: 2px 10px 12px; min-height: 0; }
+    .panel-foot { flex: 0 0 auto; padding: 10px 12px; border-top: 1px solid var(--border); }
+
+    .resizer { flex: 0 0 7px; cursor: col-resize; position: relative; touch-action: none; }
+    .resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px;
+      width: 1px; background: transparent; transition: background 0.12s; }
+    .resizer:hover::after, .resizer.active::after { background: var(--accent); }
+
+    /* the raised, rounded viewport window */
+    #viewport-shell { flex: 1; min-width: 220px; padding: 2px 2px 14px; display: flex; }
+    #viewport-frame { position: relative; flex: 1; border-radius: 18px; overflow: hidden;
+      background: #000; border: 1px solid var(--border-strong);
+      box-shadow: 0 22px 56px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+    .viewport { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+      touch-action: none; }
+    #overlay { position: absolute; inset: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 5; }
+    /* active camera-view indicator: inset outline + name badge */
+    #cam-view-frame { position: absolute; inset: 0; z-index: 8; pointer-events: none;
+      border: 2px solid var(--accent); border-radius: 17px;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.4), inset 0 0 40px rgba(255,59,31,0.08);
+      animation: cam-in 0.25s ease; }
+    #cam-view-badge { position: absolute; top: 10px; left: 12px;
+      padding: 4px 10px; border-radius: 8px; background: var(--accent); color: #fff;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+      display: flex; align-items: center; gap: 6px; }
+    #cam-view-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%;
+      background: #fff; animation: cam-pulse 1.6s ease-in-out infinite; }
+    @keyframes cam-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes cam-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+    /* path-tracing convergence indicator */
+    #rt-progress { position: absolute; bottom: 12px; right: 12px; z-index: 10;
+      display: flex; align-items: center; gap: 7px; padding: 6px 11px;
+      border-radius: 20px; background: rgba(16, 17, 21, 0.72);
+      backdrop-filter: blur(10px); border: 1px solid var(--border);
+      pointer-events: none; font-size: 11px; color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+      transition: opacity 0.6s ease, border-color 0.3s ease; }
+    #rt-progress.done { border-color: rgba(140, 233, 154, 0.45); color: #8ce99a; }
+    #rt-progress.faded { opacity: 0.3; }
+    #rt-progress svg { display: block; }
+    #rtp-check { display: none; color: #8ce99a; }
+    #rt-progress.done #rtp-check { display: block;
+      animation: rtp-pop 0.35s cubic-bezier(0.2, 1.6, 0.4, 1); }
+    #rt-progress.done #rtp-ring { display: none; }
+    @keyframes rtp-pop {
+      0% { transform: scale(0.3); }
+      100% { transform: scale(1); }
+    }
+
+    #stats-chip { position: absolute; top: 12px; right: 12px; z-index: 10;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 1px;
+      padding: 7px 11px; border-radius: 10px; background: rgba(16, 17, 21, 0.72);
+      backdrop-filter: blur(10px); border: 1px solid var(--border);
+      pointer-events: none; line-height: 1.3; }
+    #backend { font-size: 11px; color: #8ce99a; }
+    #stats { font-size: 11px; color: var(--text-dim); }
+
+    /* ============================ section cards ============================= */
+    details.sec { background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); margin: 8px 2px; overflow: hidden;
+      transition: background 0.12s ease; }
+    details.sec > summary { list-style: none; display: flex; align-items: center;
+      gap: 8px; padding: 9px 12px; cursor: pointer; user-select: none;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.09em; color: var(--text-dim);
+      transition: color 0.12s ease; }
+    details.sec > summary::-webkit-details-marker { display: none; }
+    details.sec > summary::before { content: "▸"; font-size: 9px;
+      transition: transform 0.15s ease; color: var(--text-faint); }
+    details.sec[open] > summary::before { transform: rotate(90deg); }
+    details.sec > summary:hover { color: var(--text); }
+    details.sec > .sec-body { padding: 2px 12px 12px; }
+
+    label.ctl { display: flex; align-items: center; gap: 8px; margin: 7px 0; }
+    label.ctl > span:first-child { flex: 0 0 80px; color: #c6c7cd; font-size: 12px; }
+    input.val { flex: 0 0 48px; width: 48px; padding: 2px 4px; text-align: right;
+      font-size: 11px; color: var(--text-dim); background: transparent;
+      border: 1px solid transparent; border-radius: 6px; -moz-appearance: textfield;
+      appearance: textfield; }
+    input.val::-webkit-inner-spin-button, input.val::-webkit-outer-spin-button {
+      -webkit-appearance: none; }
+    input.val:hover { border-color: var(--border-strong); background: var(--field); }
+    input.val:focus { border-color: var(--accent); background: var(--field);
+      color: var(--text); outline: none; }
+    .inline-select { flex: 1; width: auto; margin: 0; padding: 4px 6px; }
+
+    /* subtle in-section divider heading: "SURFACE ───────" */
+    .sub-head { display: flex; align-items: center; gap: 8px; margin: 13px 0 5px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.09em; color: var(--text-faint); user-select: none; }
+    .sub-head::after { content: ""; flex: 1; height: 1px;
+      background: linear-gradient(to right, var(--border), transparent); }
+
+    /* color cube + hex */
+    .color-row { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
+    .color-row input[type=color] { width: 46px; height: 46px; flex: 0 0 auto;
+      border-radius: 10px; padding: 3px; }
+    .color-info { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .color-info .color-label { font-size: 11px; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.07em; }
+    .color-info input[type=text] { width: 92px; text-transform: lowercase; }
+
+    /* numeric transform inputs */
+    .xf-row { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+    .xf-row > span { flex: 0 0 56px; color: #c6c7cd; font-size: 12px; }
+    .axf { flex: 1; position: relative; min-width: 0; display: flex; }
+    .axf > i { position: absolute; left: 7px; top: 50%; transform: translateY(-50%);
+      font-style: normal; font-size: 9px; font-weight: 700; pointer-events: none; }
+    .axf.x > i { color: #ff5f56; } .axf.y > i { color: #8ce99a; } .axf.z > i { color: #58a6ff; }
+    .axf > input { flex: 1; width: 100%; padding-left: 18px; }
+
+    /* ============================ hierarchy tree ============================ */
+    #left-panel .panel-body { overflow-x: auto; }
+    #hierarchy { margin: 4px -2px 0; min-width: max-content; }
+    .tree-row { display: flex; align-items: center; gap: 5px; padding: 3px 8px 3px 4px;
+      border-radius: 7px; cursor: pointer; white-space: nowrap;
+      width: 100%; min-width: max-content; }
+    .tree-row:hover { background: var(--card-hover); }
+    .tree-row.selected { background: var(--accent-soft);
+      box-shadow: inset 0 0 0 1px var(--accent); }
+    .tree-guides { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px; line-height: 1; white-space: pre; flex: 0 0 auto;
+      color: rgba(255, 255, 255, 0.14); user-select: none; }
+    .tree-arrow { width: 15px; text-align: center; flex: 0 0 auto; font-size: 9px;
+      color: var(--text-dim); user-select: none; }
+    .tree-arrow.clickable { cursor: pointer; }
+    .tree-arrow.clickable:hover { color: var(--text); }
+    .tree-eye { color: var(--text-dim); cursor: pointer; flex: 0 0 auto; width: 14px;
+      text-align: center; }
+    .tree-label { flex: 1; padding-right: 6px; }
+    .tree-label.group { color: #cfa96b; }
+    .tree-del { color: var(--text-faint); cursor: pointer; flex: 0 0 auto;
+      padding: 0 3px; visibility: hidden; }
+    .tree-row:hover .tree-del { visibility: visible; }
+    .tree-del:hover { color: #ff5f56; }
+    .tree-row.drop-target { outline: 1px dashed var(--accent); outline-offset: -1px; }
+    .tree-row.dragging { opacity: 0.45; }
+    .tree-head { font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--text-faint); padding: 8px 8px 3px; }
+    .tree-ico { flex: 0 0 auto; width: 16px; display: flex; align-items: center;
+      justify-content: center; color: var(--text-faint); }
+    .tree-ico svg { display: block; }
+    .tree-eye svg { display: block; margin: 0 auto; }
+    .row-btn { flex: 0 0 auto; padding: 2px 9px; border-radius: 6px;
+      border: 1px solid var(--border-strong); background: transparent; color: #b9bac1;
+      font: inherit; font-size: 11px; cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease; }
+    .row-btn:hover { background: var(--field-hover); color: var(--text); }
+
+    /* uniform icon toolbar above the hierarchy */
+    #tree-tools { display: flex; align-items: center; gap: 3px; margin: 10px 12px 2px;
+      padding: 3px; flex: 0 0 auto; background: var(--card);
+      border: 1px solid var(--border); border-radius: 10px; }
+    .tool-btn { flex: 1; min-width: 0; display: flex; align-items: center;
+      justify-content: center; padding: 6px 0; border-radius: 7px; border: none;
+      background: transparent; color: #b9bac1; cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease; }
+    .tool-btn:hover { background: var(--field-hover); color: var(--text); }
+    .tool-sep { flex: 0 0 1px; align-self: stretch; margin: 3px 2px;
+      background: var(--border-strong); }
+    .tool-btn svg { display: block; }
+
+    /* dedicated cameras area below the tree */
+    #cameras-head { border-top: 1px solid var(--border); padding-top: 10px; }
+    #camera-area { flex: 0 0 auto; max-height: 150px; overflow-y: auto;
+      padding: 0 12px 8px; }
+    #camera-area .tree-row { padding-left: 8px; }
+
+    /* ========================== texture map slots =========================== */
+    .map-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0; }
+    .map-slot { display: flex; align-items: center; gap: 7px; padding: 5px 7px;
+      border: 1px solid var(--border-strong); border-radius: 8px; background: var(--field);
+      color: #c6c7cd; font: inherit; font-size: 12px; cursor: pointer; min-width: 0;
+      transition: background 0.12s ease, border-color 0.12s ease; }
+    .map-slot:hover { background: var(--field-hover); }
+    .map-slot.has { border-color: rgba(255, 59, 31, 0.5); }
+    .map-slot .thumb { width: 22px; height: 22px; border-radius: 5px; flex: 0 0 auto;
+      background: var(--track) center / cover; border: 1px solid var(--border); }
+    .map-slot .lbl { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; }
+    .map-slot .clear { flex: 0 0 auto; color: var(--text-faint); padding: 0 2px;
+      display: none; }
+    .map-slot.has .clear { display: inline; }
+    .map-slot .clear:hover { color: #ff5f56; }
+
+    /* =============================== decals ================================ */
+    .decal-row { display: flex; align-items: center; gap: 8px; padding: 6px 9px;
+      margin: 5px 0; border: 1px solid var(--border-strong); border-radius: 8px;
+      background: var(--field); transition: border-color 0.12s ease; }
+    .decal-row.editing { border-color: var(--accent); }
+    .decal-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; }
+    .decal-row button { flex: 0 0 auto; padding: 3px 10px; border-radius: 7px;
+      border: 1px solid var(--border-strong); background: transparent; color: #b9bac1;
+      font: inherit; font-size: 12px; cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease; }
+    .decal-row button:hover { background: var(--field-hover); color: var(--text); }
+    .decal-row button.active { background: var(--accent); border-color: var(--accent);
+      color: #fff; }
+    #decal-tools { margin-top: 8px; padding: 10px 11px; border: 1px solid var(--border-strong);
+      border-radius: var(--radius); background: var(--field); }
+    #decal-tools .tools-head { display: flex; align-items: center; gap: 6px;
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+    #decal-tools .tools-head::before { content: ""; width: 6px; height: 6px;
+      border-radius: 50%; background: var(--accent); }
+    #decal-tools .hint-text { margin-bottom: 8px; }
+
+    /* ============================ settings modal ============================ */
+    #settings-backdrop { position: fixed; inset: 0; background: rgba(5, 6, 8, 0.55);
+      backdrop-filter: blur(3px); z-index: 40; display: none; }
+    #settings-backdrop.open { display: block; }
+    #settings-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 390px; max-width: calc(100vw - 32px); max-height: calc(100vh - 64px);
+      overflow-y: auto; background: var(--bg-raised); border: 1px solid var(--border-strong);
+      border-radius: var(--radius-lg); padding: 18px 20px; z-index: 41; display: none;
+      box-shadow: var(--shadow-pop); }
+    #settings-modal.open { display: block; }
+    #settings-modal h2 { font-size: 14px; letter-spacing: 0.03em; margin-bottom: 10px;
+      display: flex; align-items: center; justify-content: space-between; }
+    #settings-close { padding: 2px 9px; border-radius: 7px;
+      border: 1px solid var(--border-strong); background: transparent;
+      color: var(--text-dim); font: inherit; cursor: pointer; }
+    #settings-close:hover { background: var(--field-hover); color: var(--text); }
+    #settings-modal h3 { font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.09em; color: var(--text-dim); margin: 14px 0 4px; }
+
+    #export-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 340px; max-width: calc(100vw - 32px); background: var(--bg-raised);
+      border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
+      padding: 18px 20px; z-index: 41; display: none; box-shadow: var(--shadow-pop); }
+    #export-modal.open, #export-backdrop.open { display: block !important; }
+    #export-modal h2 { font-size: 14px; letter-spacing: 0.03em; margin-bottom: 12px;
+      display: flex; align-items: center; justify-content: space-between; }
+    #export-close { padding: 2px 9px; border-radius: 7px;
+      border: 1px solid var(--border-strong); background: transparent;
+      color: var(--text-dim); font: inherit; cursor: pointer; }
+    #export-close:hover { background: var(--field-hover); color: var(--text); }
+
+    /* ------------------------------ drop layer ------------------------------ */
+    #drop-overlay { position: fixed; inset: 0; display: none; align-items: center;
+      justify-content: center; background: rgba(255, 59, 31, 0.12);
+      border: 3px dashed var(--accent); font-size: 22px; pointer-events: none; z-index: 50; }
+    #drop-overlay.active { display: flex; }
+  </style>
+</head>
+<body>
+  <!-- ================================ top bar ============================== -->
+  <header id="topbar">
+    <div class="brand">LACQUER<span>.</span></div>
+
+    <div class="tb-group">
+      <input id="open-input" type="file" accept=".lacquer" hidden />
+      <button id="open-btn" class="tb-btn" title="Open a .lacquer scene file">Open</button>
+      <input id="file-input" type="file"
+        accept=".glb,.gltf,.obj,.fbx,.hdr,.mtl,image/*" multiple hidden />
+      <button id="import-btn" class="tb-btn" title="Import model, HDRI or texture">Import</button>
+      <button id="save-scene-btn" class="tb-btn icon" title="Save scene (⌘S)"></button>
+    </div>
+
+    <div class="tb-group">
+      <button id="undo-btn" class="tb-btn icon" title="Undo (⌘Z)" disabled></button>
+      <button id="redo-btn" class="tb-btn icon" title="Redo (⇧⌘Z)" disabled></button>
+    </div>
+
+    <div class="tb-group">
+      <button id="mode-translate" class="tb-btn icon" title="Move (W)"></button>
+      <button id="mode-rotate" class="tb-btn icon" title="Rotate (E)"></button>
+      <button id="mode-scale" class="tb-btn icon" title="Scale (R)"></button>
+    </div>
+
+    <div class="tb-group" id="snap-wrap">
+      <button id="snap-btn" class="tb-btn" title="Toggle snapping">Snap</button>
+      <button id="snap-cfg" class="tb-btn chev" title="Snap increments">▾</button>
+      <div id="snap-pop" hidden>
+        <h4>Snap increments</h4>
+        <label><span>Move (m)</span><input id="snap-step-t" type="number" min="0.01" step="0.05" value="0.25"></label>
+        <label><span>Rotate (°)</span><input id="snap-step-r" type="number" min="1" step="1" value="15"></label>
+        <label><span>Scale (×)</span><input id="snap-step-s" type="number" min="0.01" step="0.05" value="0.1"></label>
+      </div>
+    </div>
+
+    <div class="tb-group">
+      <select id="view-mode" title="Viewport shading mode">
+        <option value="standard">Rasterized</option>
+        <option value="wireframe">Wireframe</option>
+        <option value="ao">Ambient occlusion</option>
+        <option value="shadow">Shadows</option>
+        <option value="lighting">Lighting</option>
+        <option value="reflection">Reflections</option>
+      </select>
+    </div>
+
+    <div class="tb-spacer"></div>
+
+    <div class="tb-group">
+      <button id="rt-toggle" class="tb-btn" title="Toggle ray tracing (path tracer)">RT</button>
+    </div>
+
+    <div class="tb-group">
+      <button id="export-btn" class="tb-btn" title="Export a rendered image or turntable">Export render</button>
+      <button id="open-materials" class="tb-btn" title="Material library">Materials</button>
+      <button id="open-settings" class="tb-btn icon" title="Settings">⚙</button>
+    </div>
+  </header>
+
+  <!-- ============================== workspace ============================== -->
+  <div id="workspace">
+    <aside id="left-panel" class="panel">
+      <div id="tree-tools">
+        <button id="add-folder" class="tool-btn" title="New folder — drag objects into it"></button>
+        <span class="tool-sep"></span>
+        <button id="add-point" class="tool-btn" title="Add point light"></button>
+        <button id="add-spot" class="tool-btn" title="Add spot light"></button>
+        <button id="add-sun" class="tool-btn" title="Add directional light"></button>
+        <button id="add-rect" class="tool-btn" title="Add rectangular area light"></button>
+        <button id="add-oct" class="tool-btn" title="Add octagonal area light"></button>
+        <span class="tool-sep"></span>
+        <button id="add-camera" class="tool-btn" title="Add camera from current view"></button>
+      </div>
+      <div class="panel-head">Hierarchy</div>
+      <div class="panel-body">
+        <div id="hierarchy"></div>
+      </div>
+      <div class="panel-head" id="cameras-head">Cameras</div>
+      <div id="camera-area">
+        <div id="camera-list"></div>
+      </div>
+      <div class="panel-foot">
+        <div class="row">
+          <button id="isolate" class="btn">Isolate (I)</button>
+          <button id="delete-mesh" class="btn danger">Delete (⌫)</button>
+        </div>
+        <div class="hint-text">W/E/R gizmo · F focus · I isolate · ⌫ delete ·
+          ⌥click sets DoF focus · Esc deselect</div>
+      </div>
+    </aside>
+
+    <div class="resizer" id="resize-left" title="Drag to resize"></div>
+
+    <main id="viewport-shell">
+      <div id="viewport-frame">
+        <canvas id="viewport" class="viewport"></canvas>
+        <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div id="stats-chip" hidden>
+          <span id="backend"></span>
+          <span id="stats"></span>
+        </div>
+        <div id="cam-view-frame" hidden>
+          <span id="cam-view-badge"></span>
+        </div>
+        <div id="rt-progress" hidden>
+          <svg id="rtp-ring" width="15" height="15" viewBox="0 0 16 16">
+            <circle cx="8" cy="8" r="6.5" fill="none"
+              stroke="rgba(255,255,255,0.16)" stroke-width="2.2"/>
+            <circle id="rtp-arc" cx="8" cy="8" r="6.5" fill="none" stroke="#ff3b1f"
+              stroke-width="2.2" stroke-linecap="round" stroke-dasharray="40.84"
+              stroke-dashoffset="40.84" transform="rotate(-90 8 8)"/>
+          </svg>
+          <svg id="rtp-check" width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="3" stroke-linecap="round"
+            stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span id="rtp-label">0 spp</span>
+        </div>
+      </div>
+    </main>
+
+    <div class="resizer" id="resize-right" title="Drag to resize"></div>
+
+    <aside id="right-panel" class="panel">
+      <div class="panel-head">Properties</div>
+      <div class="panel-body">
+        <div id="props-empty" class="hint-text" style="padding:8px 4px">
+          Select an object, light or camera to edit its properties.
+        </div>
+        <details class="sec" open id="light-props" hidden>
+          <summary>Light</summary>
+          <div class="sec-body">
+            <div id="light-name" class="hint-text"></div>
+            <div class="color-row">
+              <input id="light-color" type="color" value="#ffffff">
+              <div class="color-info">
+                <span class="color-label">Light colour</span>
+                <input id="light-hex" type="text" spellcheck="false" maxlength="7" value="#ffffff">
+              </div>
+            </div>
+            <label class="ctl"><span>Intensity</span><input id="light-intensity" type="range" min="0" max="200" step="0.5" value="20"></label>
+            <label class="ctl" id="light-angle-row"><span>Cone angle°</span><input id="light-angle" type="range" min="2" max="80" step="1" value="30"></label>
+            <label class="ctl" id="light-soft-row"><span>Softness</span><input id="light-softness" type="range" min="0" max="1" step="0.01" value="0.3"></label>
+            <label class="ctl" id="light-width-row"><span>Width</span><input id="light-width" type="range" min="0.05" max="6" step="0.05" value="1"></label>
+            <label class="ctl" id="light-height-row"><span>Height</span><input id="light-height" type="range" min="0.05" max="6" step="0.05" value="0.6"></label>
+            <label class="switch" id="light-targeted-row" style="margin:8px 0">
+              <input id="light-targeted" type="checkbox" checked />
+              <span class="track"></span>
+              Aim at focus point
+            </label>
+            <div class="hint-text" id="light-aim-hint"></div>
+          </div>
+        </details>
+
+        <details class="sec" open id="camera-props" hidden>
+          <summary>Camera</summary>
+          <div class="sec-body">
+            <div id="camera-name" class="hint-text"></div>
+            <label class="ctl"><span>FOV°</span><input id="camera-fov" type="range" min="15" max="100" step="1" value="40"></label>
+            <button id="camera-look" class="btn">Look through camera</button>
+            <button id="camera-update" class="btn">Update to current view</button>
+            <div class="hint-text">Move with the gizmo (W); rotate aim with E.</div>
+          </div>
+        </details>
+
+        <details class="sec" open id="transform-props" hidden>
+          <summary>Transform</summary>
+          <div class="sec-body">
+            <div class="xf-row"><span>Position</span>
+              <div class="axf x"><i>X</i><input id="xf-px" type="number" step="0.01" disabled></div>
+              <div class="axf y"><i>Y</i><input id="xf-py" type="number" step="0.01" disabled></div>
+              <div class="axf z"><i>Z</i><input id="xf-pz" type="number" step="0.01" disabled></div>
+            </div>
+            <div class="xf-row"><span>Rotation °</span>
+              <div class="axf x"><i>X</i><input id="xf-rx" type="number" step="1" disabled></div>
+              <div class="axf y"><i>Y</i><input id="xf-ry" type="number" step="1" disabled></div>
+              <div class="axf z"><i>Z</i><input id="xf-rz" type="number" step="1" disabled></div>
+            </div>
+            <div class="xf-row"><span>Scale</span>
+              <div class="axf x"><i>X</i><input id="xf-sx" type="number" step="0.01" disabled></div>
+              <div class="axf y"><i>Y</i><input id="xf-sy" type="number" step="0.01" disabled></div>
+              <div class="axf z"><i>Z</i><input id="xf-sz" type="number" step="0.01" disabled></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="sec" open id="material-props" hidden>
+          <summary>Material</summary>
+          <div class="sec-body">
+            <div id="mat-target" class="hint-text"></div>
+            <label class="ctl"><span>Name</span>
+              <input id="mat-name" type="text" spellcheck="false" style="flex:1" disabled></label>
+            <div class="color-row">
+              <input id="mat-color" type="color" value="#b01010">
+              <div class="color-info">
+                <span class="color-label">Base colour</span>
+                <input id="mat-hex" type="text" spellcheck="false" maxlength="7" value="#b01010">
+              </div>
+            </div>
+
+            <div class="sub-head">Surface</div>
+            <label class="ctl"><span>Metallic</span><input id="mat-metallic" type="range" min="0" max="1" step="0.01" value="0.3"></label>
+            <label class="ctl"><span>Roughness</span><input id="mat-roughness" type="range" min="0.02" max="1" step="0.01" value="0.45"></label>
+            <label class="ctl"><span>Clearcoat</span><input id="mat-clearcoat" type="range" min="0" max="1" step="0.01" value="1"></label>
+            <label class="ctl"><span>Transmission</span><input id="mat-transmission" type="range" min="0" max="1" step="0.01" value="0"></label>
+            <label class="ctl"><span>IOR</span><input id="mat-ior" type="range" min="1.0" max="2.4" step="0.01" value="1.5"></label>
+            <label class="ctl"><span>Flakes</span><input id="mat-flakes" type="range" min="0" max="1" step="0.01" value="0.25"></label>
+
+            <div class="sub-head">Emission</div>
+            <label class="ctl"><span>Colour</span>
+              <input id="mat-emissive" type="color" value="#ffffff" style="flex:1;width:auto;height:26px"></label>
+            <label class="ctl"><span>Strength</span><input id="mat-emissive-str" type="range" min="0" max="20" step="0.1" value="0"></label>
+
+            <div class="sub-head">Texture maps</div>
+            <div class="map-grid">
+              <button class="map-slot" id="slot-albedoMap">
+                <span class="thumb"></span><span class="lbl">Albedo</span><span class="clear">✕</span>
+              </button>
+              <button class="map-slot" id="slot-normalMap">
+                <span class="thumb"></span><span class="lbl">Normal</span><span class="clear">✕</span>
+              </button>
+              <button class="map-slot" id="slot-roughnessMap">
+                <span class="thumb"></span><span class="lbl">Roughness</span><span class="clear">✕</span>
+              </button>
+              <button class="map-slot" id="slot-metallicMap">
+                <span class="thumb"></span><span class="lbl">Metallic</span><span class="clear">✕</span>
+              </button>
+            </div>
+            <input id="map-file" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+            <label class="ctl"><span>Mapping</span>
+              <select id="map-mode" class="inline-select">
+                <option value="uv">UV coordinates</option>
+                <option value="triplanar">Triplanar (world)</option>
+              </select>
+            </label>
+            <label class="ctl"><span>Tiling</span><input id="map-scale" type="range" min="0.1" max="8" step="0.1" value="1"></label>
+
+            <div class="sub-head">Presets &amp; library</div>
+            <div class="row">
+              <button id="preset-paint" class="btn">Paint</button>
+              <button id="preset-glass" class="btn">Glass</button>
+              <button id="preset-chrome" class="btn">Chrome</button>
+            </div>
+            <button id="save-to-lib" class="btn">＋ Save material to library</button>
+            <button id="open-materials-2" class="btn">Open material library…</button>
+          </div>
+        </details>
+
+        <details class="sec" id="decal-props" hidden>
+          <summary>Livery decals</summary>
+          <div class="sec-body">
+            <button id="add-decal" class="btn">+ Add decal to selected</button>
+            <div id="decal-list"></div>
+            <div id="decal-tools" hidden>
+              <div class="tools-head">Editing decal</div>
+              <div class="hint-text">Drag the gizmo to place it — W move · E rotate · R resize</div>
+              <input id="decal-file" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+              <label class="ctl"><span>Opacity</span><input id="decal-opacity" type="range" min="0" max="1" step="0.01" value="1"></label>
+              <label class="ctl"><span>Finish</span>
+                <span class="row" style="flex:1">
+                  <button id="decal-glossy" class="btn" style="margin:0">Glossy</button>
+                  <button id="decal-matte" class="btn" style="margin:0">Matte</button>
+                </span>
+              </label>
+              <button id="decal-image" class="btn">Replace image…</button>
+              <div class="row">
+                <button id="decal-delete" class="btn danger">Delete</button>
+                <button id="decal-done" class="btn">Done</button>
+              </div>
+            </div>
+            <button id="clear-decals" class="btn danger">Clear all decals</button>
+          </div>
+        </details>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ============================ settings modal =========================== -->
+  <div id="settings-backdrop"></div>
+  <div id="settings-modal" role="dialog" aria-label="Settings">
+    <h2>Settings <button id="settings-close">✕</button></h2>
+    <h3>Render</h3>
+    <label class="ctl"><span>Exposure</span><input id="exposure" type="range" min="-4" max="4" step="0.1" value="0"></label>
+    <label class="ctl"><span>Bounces</span><input id="bounces" type="range" min="1" max="16" step="1" value="6"></label>
+    <label class="ctl"><span>Res. scale</span><input id="res-scale" type="range" min="0.25" max="1" step="0.05" value="1"></label>
+    <div class="hint-text">Renders below 100% are upscaled edge-aware to the
+      display — drop to ~60% for much faster ray tracing that still looks sharp.</div>
+    <label class="switch" style="margin:8px 0">
+      <input id="denoise-toggle" type="checkbox" checked />
+      <span class="track"></span>
+      Denoise path tracing (fades as it converges)
+    </label>
+    <h3>Environment</h3>
+    <label class="ctl"><span>Intensity</span><input id="env-intensity" type="range" min="0" max="4" step="0.05" value="1"></label>
+    <label class="ctl"><span>Rotation</span><input id="env-rotation" type="range" min="0" max="360" step="1" value="0"></label>
+    <h3>Camera</h3>
+    <label class="ctl"><span>Aperture</span><input id="aperture" type="range" min="0" max="0.12" step="0.002" value="0"></label>
+    <label class="ctl"><span>Focus dist.</span><input id="focus" type="range" min="1" max="20" step="0.1" value="5.8"></label>
+    <h3>Interface</h3>
+    <label class="switch" style="margin:6px 0">
+      <input id="stats-toggle" type="checkbox" />
+      <span class="track"></span>
+      Show render stats (backend · spp · triangles)
+    </label>
+    <label class="ctl"><span>Converged at</span>
+      <input id="rt-target" type="range" min="32" max="2048" step="32" value="256"></label>
+    <div class="hint-text">Sample count at which the path-tracing indicator
+      shows “done”.</div>
+  </div>
+
+  <!-- ============================= export modal ============================ -->
+  <div id="export-backdrop" style="position:fixed;inset:0;background:rgba(5,6,8,0.55);backdrop-filter:blur(3px);z-index:40;display:none"></div>
+  <div id="export-modal" role="dialog" aria-label="Export image">
+    <h2>Export image <button id="export-close">✕</button></h2>
+    <div class="xf-row"><span>Size (px)</span>
+      <input id="export-w" type="number" min="16" max="8192" step="1" value="1920">
+      <input id="export-h" type="number" min="16" max="8192" step="1" value="1080">
+    </div>
+    <label class="switch" style="margin:10px 0 6px">
+      <input id="export-rt" type="checkbox" />
+      <span class="track"></span>
+      Path trace the export (ray traced)
+    </label>
+    <label class="ctl" id="export-samples-row">
+      <span>Samples</span>
+      <input id="export-samples" type="range" min="16" max="2048" step="16" value="256">
+    </label>
+    <label class="switch" style="margin:6px 0">
+      <input id="export-turntable" type="checkbox" />
+      <span class="track"></span>
+      Turntable — orbit &amp; export a ZIP of frames
+    </label>
+    <label class="ctl" id="export-frames-row" style="display:none">
+      <span>Frames</span>
+      <input id="export-frames" type="range" min="8" max="120" step="1" value="36">
+    </label>
+    <div class="hint-text">Renders with the current camera and view settings.
+      Path tracing waits for every sample before saving.</div>
+    <button id="export-run" class="btn">Render &amp; download PNG</button>
+    <button id="export-copy" class="btn">Render &amp; copy to clipboard</button>
+    <div id="export-status" class="hint-text" style="min-height:16px"></div>
+  </div>
+
+  <div id="drop-overlay">Drop to load</div>
+
+  <script type="module" src="/src/demo/main.ts"></script>
+</body>
+</html>
