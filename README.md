@@ -8,6 +8,12 @@ device the viewer happens to have. It runs a WebGPU path tracer where it can and
 back to a fast WebGL2 renderer everywhere else, so the same scene looks consistent from
 a workstation to an iPad.
 
+## Screenshots
+
+![DefaultStage](./assets/DefaultStage.jpeg)
+![MaterialLibrary](./assets/MatLibrary.jpeg)
+![RaytracingExample](./assets/RTExample.jpeg)
+
 ---
 
 ## Table of contents
