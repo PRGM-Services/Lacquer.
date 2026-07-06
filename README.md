@@ -57,7 +57,7 @@ npm run dev     # start the app
 ```
 
 Then open the URL it prints (by default <http://localhost:5173>). You should see the
-viewer with a default scene. Drag a `.glb` model and a `.hdr` environment onto the
+viewer with a default scene. Drag a `.glb`,`.fbx` or `.obj` model and a `.hdr` environment onto the
 window to get started, or use the **Import** button in the top bar.
 
 To make a production build:
