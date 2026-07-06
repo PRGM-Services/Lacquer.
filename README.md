@@ -171,9 +171,11 @@ cover just about every edit.
 | Move / Rotate / Scale tool | `W` / `E` / `R` |
 | Frame the selection | `F` |
 | Isolate the selection | `I` |
+| Hide all overlays (game mode) | `G` |
 | Delete the selection | `Delete` / `Backspace` |
 | Deselect | `Esc` |
 | Set the orbit pivot | Double-click a surface |
+| Reset the orbit pivot | `Home` |
 | Set depth-of-field focus | Alt-click a surface |
 | Undo / Redo | `Cmd/Ctrl+Z` / `Shift+Cmd/Ctrl+Z` |
 | Save scene | `Cmd/Ctrl+S` |

@@ -241,10 +241,11 @@ selection.onChange = (selected) => {
   sceneSelectionHook?.(selected);
   decalEditState = null; // scene hook re-targeted the gizmo to the mesh
   if (selected.length > 0) {
-    // picking a mesh releases any light/camera selection
+    // picking a mesh releases any light/camera/environment selection
     selectedLight = null;
     editingLightTarget = false;
     selectedViewCam = null;
+    selectedEnv = false;
     refreshLightUI();
     refreshCameraUI();
   }
@@ -310,12 +311,14 @@ document.addEventListener("pointermove", (e) => {
   const dy = e.clientY - lastY;
   lastX = e.clientX;
   lastY = e.clientY;
-  if (dx !== 0 || dy !== 0) clearActiveView(); // manual move leaves camera view
   if (panning) scene.camera.pan(-dx * 0.004, dy * 0.004);
   else {
     scene.camera.orbit(-dx * 0.005, -dy * 0.005);
-    pivotVisibleUntil = performance.now() + 900; // flash the pivot while orbiting
+    // Only show the pivot reticle when the user set one with a double-click.
+    if (customPivotActive) pivotVisibleUntil = performance.now() + 900;
   }
+  // Looking through a camera "possesses" it: moving drives the camera itself.
+  if (activeViewCam && (dx !== 0 || dy !== 0)) possessActiveCam();
 });
 document.addEventListener("pointerup", (e) => {
   if (!orbiting) return;
@@ -353,7 +356,8 @@ document.addEventListener("dblclick", (e) => {
   // look at (and orbit around) the clicked point.
   const dist = length(sub(scene.camera.position, pivot));
   animateCameraTo(pivot, scene.camera.position, Math.max(0.1, dist));
-  pivotVisibleUntil = performance.now() + 2000;
+  customPivotActive = true;
+  pivotVisibleUntil = performance.now() + 2500;
 });
 document.addEventListener("contextmenu", (e) => {
   if (onViewport(e)) e.preventDefault();
@@ -361,8 +365,8 @@ document.addEventListener("contextmenu", (e) => {
 document.addEventListener("wheel", (e) => {
   if (!onViewport(e)) return;
   e.preventDefault();
-  clearActiveView();
   scene.camera.dolly(Math.exp(e.deltaY * 0.0012));
+  if (activeViewCam) possessActiveCam(); // dolly the possessed camera too
 }, { passive: false });
 
 window.addEventListener("keydown", (e) => {
@@ -390,6 +394,8 @@ window.addEventListener("keydown", (e) => {
   else if (e.code === "KeyR") setGizmoMode("scale");
   else if (e.code === "KeyI") toggleIsolate();
   else if (e.code === "KeyF") focusSelected();
+  else if (e.code === "KeyG") toggleOverlays();          // game mode: hide editor overlays
+  else if (e.code === "Home") resetOrbitPivot();         // recenter the orbit point
   else if (e.code === "Delete" || e.code === "Backspace") {
     e.preventDefault();
     if (selectedLight) deleteLight(selectedLight);
@@ -402,8 +408,10 @@ window.addEventListener("keydown", (e) => {
     if (settingsModal.classList.contains("open")) setSettingsOpen(false);
     else if (exportModal.classList.contains("open")) setExportOpen(false);
     else if (decalEditState) endDecalEdit();
+    else if (activeViewCam) clearActiveView();  // stop possessing the camera
     else if (selectedLight) selectLight(null);
     else if (selectedViewCam) selectViewCam(null);
+    else if (selectedEnv) selectEnvironment(false);
     else selection.clear();
   }
 });
@@ -441,6 +449,7 @@ function worldAABBOf(roots: Mesh[]): { min: Vec3; max: Vec3 } | null {
  *  selected), keeping the current viewing direction. */
 function focusSelected(): void {
   clearActiveView();
+  customPivotActive = false; // framing sets a fresh, non-custom pivot
   const cam = scene.camera;
   const primary = selection.getPrimary();
   const roots = primary ? [primary] : scene.meshes.filter((m) => m !== ground);
@@ -584,23 +593,27 @@ function transformCtx(): TransformCtx | null {
   return { target, rot: true, scale: true }; // mesh or decal
 }
 
+let selectedEnv = false;
+
 /**
  * Show only the property sections relevant to the current selection so the
  * panel isn't crowded: a mesh gets Transform+Material+Decals, a light gets
- * Transform+Light, a camera gets Transform+Camera.
+ * Transform+Light, a camera gets Transform+Camera, the environment gets its
+ * own controls.
  */
 function refreshPropertyPanels(): void {
   const mesh = selection.getPrimary();
-  const showMesh = !!mesh && !selectedLight && !selectedViewCam;
+  const showMesh = !!mesh && !selectedLight && !selectedViewCam && !selectedEnv;
   const showLight = !!selectedLight;
   const showCam = !!selectedViewCam;
-  const anything = showMesh || showLight || showCam || !!decalEditState;
+  const anything = showMesh || showLight || showCam || selectedEnv || !!decalEditState;
   const setVis = (id: string, on: boolean): void => { $(id).hidden = !on; };
-  setVis("transform-props", anything);
+  setVis("transform-props", anything && !selectedEnv);
   setVis("material-props", showMesh);
   setVis("decal-props", showMesh);
   setVis("light-props", showLight);
   setVis("camera-props", showCam);
+  setVis("env-props", selectedEnv);
   $("props-empty").hidden = anything;
 }
 
@@ -808,11 +821,33 @@ let decalBox!: SVGPathElement;
 let pivotMarker!: SVGGElement;
 /** Orbit pivot reticle stays visible until this timestamp (ms). */
 let pivotVisibleUntil = 0;
+/** True once the user set a pivot with a double-click (crosshair only shows then). */
+let customPivotActive = false;
+/** "Game mode" — hide all editor overlays (gizmos, boxes, indicators). */
+let overlaysHidden = false;
 let lightTargetMarker!: SVGGElement;
 let lightTargetLine!: SVGLineElement;
 let lightTargetHit!: SVGGElement;
 
 let iconLayer!: SVGGElement;
+
+/** Toggle all viewport editor overlays (like Unreal's "G" game mode). */
+function toggleOverlays(): void {
+  overlaysHidden = !overlaysHidden;
+  overlay.style.display = overlaysHidden ? "none" : "";
+}
+
+/** Recenter the orbit point on the scene and drop any custom (double-click) pivot. */
+function resetOrbitPivot(): void {
+  customPivotActive = false;
+  pivotVisibleUntil = 0;
+  const box = worldAABBOf(scene.meshes.filter((m) => m !== ground));
+  const cam = scene.camera;
+  const center: Vec3 = box
+    ? [(box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2]
+    : [0, 0.4, 0];
+  animateCameraTo(center, cam.position, length(sub(cam.position, center)));
+}
 
 function buildOverlay(): void {
   // Light/camera indicators render beneath the gizmo elements.
@@ -1073,6 +1108,46 @@ interface SceneIcon {
 let lightIcons: SceneIcon[] = [];
 let camIcons: SceneIcon[] = [];
 
+/** A distinct fixed-size silhouette per light type, so lights are told apart
+ *  at a glance: disc (point), cone (spot), starburst (sun), rectangle (rect),
+ *  octagon (octagon). Filled with the light colour each frame. */
+function lightBodyShape(type: LightType): SVGElement {
+  const path = (d: string): SVGElement => {
+    const p = document.createElementNS(SVG_NS, "path");
+    p.setAttribute("d", d);
+    return p;
+  };
+  if (type === "point") {
+    const c = document.createElementNS(SVG_NS, "circle");
+    c.setAttribute("r", "5");
+    return c;
+  }
+  if (type === "spot") return path("M0,-6.5 L5.5,5 L-5.5,5 Z");
+  if (type === "rect") {
+    const r = document.createElementNS(SVG_NS, "rect");
+    r.setAttribute("x", "-7"); r.setAttribute("y", "-4.5");
+    r.setAttribute("width", "14"); r.setAttribute("height", "9");
+    r.setAttribute("rx", "1.5");
+    return r;
+  }
+  if (type === "octagon") {
+    let d = "";
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
+      d += `${k === 0 ? "M" : "L"}${(Math.cos(a) * 6).toFixed(1)},${(Math.sin(a) * 6).toFixed(1)}`;
+    }
+    return path(d + "Z");
+  }
+  // directional (sun): an 8-spike starburst
+  let d = "";
+  for (let k = 0; k < 16; k++) {
+    const r = k % 2 === 0 ? 6.5 : 2.6;
+    const a = (k / 16) * Math.PI * 2;
+    d += `${k === 0 ? "M" : "L"}${(Math.cos(a) * r).toFixed(1)},${(Math.sin(a) * r).toFixed(1)}`;
+  }
+  return path(d + "Z");
+}
+
 function makeIcon(kind: "light" | "camera", key: object, onPick: () => void): SceneIcon {
   const g = document.createElementNS(SVG_NS, "g");
   g.style.pointerEvents = "auto";
@@ -1087,8 +1162,7 @@ function makeIcon(kind: "light" | "camera", key: object, onPick: () => void): Sc
   glyph.setAttribute("stroke-width", "1.6");
   let body: SVGElement;
   if (kind === "light") {
-    body = document.createElementNS(SVG_NS, "circle");
-    body.setAttribute("r", "4.5");
+    body = lightBodyShape((key as Light).type);
   } else {
     body = document.createElementNS(SVG_NS, "rect");
     body.setAttribute("x", "-7");
@@ -1109,9 +1183,9 @@ function makeIcon(kind: "light" | "camera", key: object, onPick: () => void): Sc
   return { key, g, halo, glyph, body };
 }
 
-/** Orbit-pivot reticle at the camera's target, fading out when idle. */
+/** Orbit-pivot reticle at the camera's target, shown only after a double-click. */
 function drawPivot(vp: Mat4): void {
-  const remain = pivotVisibleUntil - performance.now();
+  const remain = customPivotActive ? pivotVisibleUntil - performance.now() : 0;
   if (remain <= 0) {
     pivotMarker.setAttribute("visibility", "hidden");
     return;
@@ -1190,15 +1264,21 @@ function drawSceneIcons(vp: Mat4): void {
     ic.glyph.setAttribute("stroke", hex);
     ic.halo.setAttribute("visibility", selectedLight === light ? "visible" : "hidden");
 
+    // The body silhouette conveys the light TYPE; the glyph adds direction (an
+    // aim line toward the target) and, for the selected area light, the real
+    // projected emitter outline so you can judge its size in the scene.
     let dPath = "";
-    if (light.type === "point") {
-      for (let k = 0; k < 8; k++) {
-        const a = (k * Math.PI) / 4;
-        dPath += `M${(Math.cos(a) * 7).toFixed(1)},${(Math.sin(a) * 7).toFixed(1)}` +
-          `L${(Math.cos(a) * 10.5).toFixed(1)},${(Math.sin(a) * 10.5).toFixed(1)}`;
+    const dirLight = light.type !== "point";
+    if (dirLight) {
+      const tip = project(vp, add(light.position, v3scale(normalize(light.direction), 0.8)));
+      if (tip) {
+        const dx = tip[0] - s[0];
+        const dy = tip[1] - s[1];
+        const len = Math.hypot(dx, dy) || 1;
+        dPath += `M0,0L${((dx / len) * 24).toFixed(1)},${((dy / len) * 24).toFixed(1)}`;
       }
-    } else if (light.type === "rect" || light.type === "octagon") {
-      // project the actual emitter outline (matches the sampled shape)
+    }
+    if (selectedLight === light && (light.type === "rect" || light.type === "octagon")) {
       const nL = normalize(light.direction);
       const seed: Vec3 = Math.abs(nL[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
       const bu = normalize(cross(nL, seed));
@@ -1208,57 +1288,24 @@ function drawSceneIcons(vp: Mat4): void {
         const hw = light.width / 2;
         const hh = light.height / 2;
         for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
-          verts.push(add(light.position,
-            add(v3scale(bu, su * hw), v3scale(bv, sv * hh))));
+          verts.push(add(light.position, add(v3scale(bu, su * hw), v3scale(bv, sv * hh))));
         }
       } else {
         const r = light.width / 2;
         for (let k = 0; k < 8; k++) {
-          const a = (k / 8) * Math.PI * 2;
+          const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
           verts.push(add(light.position,
             add(v3scale(bu, Math.cos(a) * r), v3scale(bv, Math.sin(a) * r))));
         }
       }
       let ok = true;
+      let outline = "";
       verts.forEach((wp, k) => {
         const sp = project(vp, wp);
         if (!sp) { ok = false; return; }
-        dPath += `${k === 0 ? "M" : "L"}${(sp[0] - s[0]).toFixed(1)},${(sp[1] - s[1]).toFixed(1)}`;
+        outline += `${k === 0 ? "M" : "L"}${(sp[0] - s[0]).toFixed(1)},${(sp[1] - s[1]).toFixed(1)}`;
       });
-      if (ok) {
-        dPath += "Z";
-        const tick = project(vp, add(light.position, v3scale(nL, 0.3)));
-        if (tick) dPath += `M0,0L${(tick[0] - s[0]).toFixed(1)},${(tick[1] - s[1]).toFixed(1)}`;
-      } else dPath = "";
-    } else {
-      const tip = project(vp, add(light.position, v3scale(normalize(light.direction), 0.8)));
-      if (tip) {
-        const dx = tip[0] - s[0];
-        const dy = tip[1] - s[1];
-        const len = Math.hypot(dx, dy) || 1;
-        const ux = (dx / len) * 26;
-        const uy = (dy / len) * 26;
-        if (light.type === "spot") {
-          // open cone toward the target
-          const px = -uy * 0.33;
-          const py = ux * 0.33;
-          dPath = `M0,0L${(ux + px).toFixed(1)},${(uy + py).toFixed(1)}` +
-            `M0,0L${(ux - px).toFixed(1)},${(uy - py).toFixed(1)}` +
-            `M${(ux * 0.55 + px * 0.55).toFixed(1)},${(uy * 0.55 + py * 0.55).toFixed(1)}` +
-            `Q${(ux * 0.68).toFixed(1)},${(uy * 0.68).toFixed(1)} ` +
-            `${(ux * 0.55 - px * 0.55).toFixed(1)},${(uy * 0.55 - py * 0.55).toFixed(1)}`;
-        } else {
-          // three parallel sun rays
-          const px = (-uy / 26) * 6;
-          const py = (ux / 26) * 6;
-          for (const off of [-1, 0, 1]) {
-            const ox = px * off;
-            const oy = py * off;
-            dPath += `M${ox.toFixed(1)},${oy.toFixed(1)}` +
-              `L${(ox + ux * 0.8).toFixed(1)},${(oy + uy * 0.8).toFixed(1)}`;
-          }
-        }
-      }
+      if (ok) dPath += outline + "Z";
     }
     ic.glyph.setAttribute("d", dPath);
   });
@@ -1430,12 +1477,66 @@ function resetEnvironment(): void {
   buildHierarchyUI();
 }
 
+/** Select the environment so its controls appear in the Properties panel. */
+function selectEnvironment(on: boolean): void {
+  if (on) {
+    selection.clear();       // release any mesh/decal selection + gizmo
+    selectedLight = null;
+    editingLightTarget = false;
+    selectedViewCam = null;
+  }
+  selectedEnv = on;
+  refreshLightUI();
+  refreshCameraUI();
+  syncEnvProps();
+  refreshPropertyPanels();
+  buildHierarchyUI();
+}
+
+function syncEnvProps(): void {
+  if (!selectedEnv) return;
+  const env = scene.environment;
+  $("env-prop-name").textContent = envName;
+  $<HTMLInputElement>("env-prop-intensity").value =
+    String(envHiddenIntensity ?? env.intensity);
+  $<HTMLInputElement>("env-prop-rotation").value =
+    String(Math.round((env.rotation * 180) / Math.PI));
+  $<HTMLInputElement>("env-prop-backdrop").checked = engine.settings.envBackground;
+  $<HTMLInputElement>("env-prop-lighting").checked = envHiddenIntensity === null;
+  refreshSliderReadouts();
+}
+
 function treeHead(host: HTMLElement, text: string): void {
   const head = document.createElement("div");
   head.className = "tree-head";
   head.textContent = text;
   host.appendChild(head);
 }
+
+$<HTMLInputElement>("env-prop-intensity").addEventListener("input", (e) => {
+  const v = parseFloat((e.target as HTMLInputElement).value);
+  if (envHiddenIntensity !== null) envHiddenIntensity = v; // stash while lighting off
+  else scene.environment.intensity = v;
+  engine.resetAccumulation();
+});
+$<HTMLInputElement>("env-prop-rotation").addEventListener("input", (e) => {
+  scene.environment.rotation = (parseFloat((e.target as HTMLInputElement).value) * Math.PI) / 180;
+  engine.resetAccumulation();
+});
+$<HTMLInputElement>("env-prop-backdrop").addEventListener("change", (e) => {
+  engine.settings.envBackground = (e.target as HTMLInputElement).checked;
+  engine.resetAccumulation();
+  buildHierarchyUI();
+});
+$<HTMLInputElement>("env-prop-lighting").addEventListener("change", () => {
+  toggleEnvironment(); // flips envHiddenIntensity + rebuilds hierarchy
+  syncEnvProps();
+});
+$("env-prop-import").addEventListener("click", () => $<HTMLInputElement>("file-input").click());
+$("env-prop-reset").addEventListener("click", () => {
+  resetEnvironment();
+  syncEnvProps();
+});
 
 function buildHierarchyUI(): void {
   const host = $("hierarchy");
@@ -1445,7 +1546,8 @@ function buildHierarchyUI(): void {
   treeHead(host, "Environment");
   {
     const row = document.createElement("div");
-    row.className = "tree-row";
+    row.className = `tree-row${selectedEnv ? " selected" : ""}`;
+    row.addEventListener("click", () => selectEnvironment(true));
     const glyph = document.createElement("span");
     glyph.className = "tree-ico";
     glyph.innerHTML = iconSVG("globe", 12);
@@ -1741,6 +1843,7 @@ async function importHDR(file: File): Promise<void> {
   envName = file.name.replace(/\.[^.]+$/, "");
   envHiddenIntensity = null;
   buildHierarchyUI();
+  if (selectedEnv) syncEnvProps();
 }
 
 async function handleFiles(fileList: FileList | File[]): Promise<void> {
@@ -2277,6 +2380,7 @@ function pushLightUpdate(): void {
 function selectLight(light: Light | null): void {
   selection.clear(); // also resets decal edit + gizmo target via the hook
   selectedViewCam = null;
+  if (light) selectedEnv = false;
   selectedLight = light;
   editingLightTarget = false;
   if (light) gizmo.setTarget(new LightGizmoTarget(light));
@@ -2461,6 +2565,7 @@ function selectViewCam(cam: ViewCam | null): void {
   selection.clear();
   selectedLight = null;
   editingLightTarget = false;
+  if (cam) selectedEnv = false;
   selectedViewCam = cam;
   if (cam) gizmo.setTarget(new CamGizmoTarget(cam));
   refreshLightUI();
@@ -2496,6 +2601,21 @@ function clearActiveView(): void {
   if (!activeViewCam) return;
   activeViewCam = null;
   $("cam-view-frame").hidden = true;
+}
+$("cam-view-exit").addEventListener("click", () => clearActiveView());
+
+/** While looking through a camera, write the live viewpoint back into it, so
+ *  moving the view actually moves (possesses) the camera. */
+function possessActiveCam(): void {
+  const c = activeViewCam;
+  if (!c) return;
+  const cam = scene.camera;
+  c.position = [...cam.position];
+  c.target = [...cam.target];
+  c.fovYDeg = cam.fovYDeg;
+  c.aperture = cam.aperture;
+  c.focusDistance = cam.focusDistance;
+  if (selectedViewCam === c) syncCameraProps();
 }
 
 function refreshCameraUI(): void {
@@ -2953,6 +3073,17 @@ async function runExport(deliver: "download" | "clipboard"): Promise<void> {
     position: [...cam.position] as Vec3, target: [...cam.target] as Vec3,
     fovYDeg: cam.fovYDeg, aperture: cam.aperture, focusDistance: cam.focusDistance,
   };
+
+  // Match the viewport's framing. The renderer uses a fixed vertical FOV, so an
+  // export wider than the viewport would otherwise reveal extra content on the
+  // sides ("too wide"). Keep the same horizontal field of view instead, so the
+  // export is a true crop of what you see rather than a wider shot.
+  const vpAspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
+  const exAspect = w / h;
+  if (exAspect > vpAspect) {
+    const tanX = Math.tan((savedCam.fovYDeg * Math.PI) / 360) * vpAspect;
+    cam.fovYDeg = (2 * Math.atan(tanX / exAspect) * 180) / Math.PI;
+  }
 
   // Turntable orbit basis (elevation + radius preserved, yaw swept 360°).
   const off = sub(cam.position, cam.target);
