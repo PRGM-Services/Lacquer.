@@ -4,6 +4,8 @@ node_modules/
 # build output
 dist/
 
+docs/
+
 # editor / OS
 .DS_Store
 *.log
