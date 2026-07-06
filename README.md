@@ -8,6 +8,11 @@ device the viewer happens to have. It runs a WebGPU path tracer where it can and
 back to a fast WebGL2 renderer everywhere else, so the same scene looks consistent from
 a workstation to an iPad.
 
+## Render Output Examples:
+
+![RenderOutputFront](./assets/TestRender.png)
+![RenderOutputRear](./assets/TestRender2.png)
+
 ## Screenshots
 
 ![DefaultStage](./assets/DefaultStage.jpeg)
@@ -52,7 +57,7 @@ npm run dev     # start the app
 ```
 
 Then open the URL it prints (by default <http://localhost:5173>). You should see the
-viewer with a default scene. Drag a `.glb` model and a `.hdr` environment onto the
+viewer with a default scene. Drag a `.glb`,`.fbx` or `.obj` model and a `.hdr` environment onto the
 window to get started, or use the **Import** button in the top bar.
 
 To make a production build:
